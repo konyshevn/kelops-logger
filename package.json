@@ -4,6 +4,17 @@
   "description": "Send logs from Node.js to KELOPS",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konyshevn/kelops-logger.git"
+  },
+  "author": "KELOPS",
+  "keywords": [
+    "kelops",
+    "logger",
+    "logging",
+    "logs"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -31,7 +42,8 @@
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
