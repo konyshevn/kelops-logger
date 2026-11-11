@@ -1,14 +1,14 @@
 # kelops-logger
 
-Отправка логов из Node.js в KELOPS. Без зависимостей, работает на встроенном `fetch` (Node.js 18 и новее). Подходит для серверного кода: ключ API не нужно передавать в браузер.
+Send logs from Node.js to KELOPS. No dependencies, built on the native `fetch` (Node.js 18 or newer). Meant for server-side code, so the API key never has to reach a browser.
 
-## Установка
+## Installation
 
 ```
 npm install kelops-logger
 ```
 
-## Быстрый старт
+## Quick start
 
 ```ts
 import { KelopsLogger } from 'kelops-logger'
@@ -19,30 +19,30 @@ const logger = new KelopsLogger({
   onError: (error) => console.error(error.code, error.message),
 })
 
-await logger.info('Сервис запущен', { port: 3000 })
+await logger.info('Service started', { port: 3000 })
 
 try {
   await chargeCard(order)
 } catch (error) {
-  await logger.error('Не удалось списать оплату', { orderId: order.id, error })
+  await logger.error('Card charge failed', { orderId: order.id, error })
 }
 
 await logger.close()
 ```
 
-Методы `debug`, `info`, `warn`, `error` принимают сообщение и необязательный объект `context`. Значения `Error` в `context` превращаются в `{ name, message, stack }`, циклические ссылки заменяются на `[Circular]`.
+The methods `debug`, `info`, `warn` and `error` take a message and an optional `context` object. `Error` values inside `context` are turned into `{ name, message, stack }`, and circular references are replaced with `[Circular]`.
 
-Каждый вызов отправляет один запрос. Метод возвращает `Promise`, который никогда не отклоняется: ошибки приходят в `onError`. Можно не ждать результат, но перед завершением процесса вызовите `await logger.close()`.
+Every call sends one request. The method returns a `Promise` that never rejects: errors are passed to `onError`. You do not have to await it, but call `await logger.close()` before the process exits.
 
-Другой сервис для одной записи:
+Use another service name for a single entry:
 
 ```ts
-await logger.log({ level: 'warn', message: 'Медленный запрос', service: 'payments', context: { ms: 1800 } })
+await logger.log({ level: 'warn', message: 'Slow query', service: 'payments', context: { ms: 1800 } })
 ```
 
-## Очередь
+## Buffering
 
-По умолчанию очереди нет. Чтобы собирать логи в пачки, включите `buffer`:
+There is no queue by default. To collect logs into batches, enable `buffer`:
 
 ```ts
 const logger = new KelopsLogger({
@@ -51,7 +51,7 @@ const logger = new KelopsLogger({
   buffer: { batchSize: 200, intervalMs: 1000 },
 })
 
-logger.info('Запрос обработан', { path: '/orders', ms: 42 })
+logger.info('Request handled', { path: '/orders', ms: 42 })
 
 process.on('SIGTERM', async () => {
   await logger.close()
@@ -59,19 +59,19 @@ process.on('SIGTERM', async () => {
 })
 ```
 
-| Параметр | По умолчанию | Значение |
+| Option | Default | Meaning |
 |---|---|---|
-| `batchSize` | 100 | сколько записей накопить до отправки |
-| `intervalMs` | 2000 | через сколько отправить накопленное, если пачка не набралась |
-| `maxQueue` | 10000 | максимум записей в памяти |
+| `batchSize` | 100 | how many entries to collect before sending |
+| `intervalMs` | 2000 | how long to wait before sending an incomplete batch |
+| `maxQueue` | 10000 | maximum number of entries kept in memory |
 
-В очереди только один запрос выполняется одновременно, остальное копится. При переполнении удаляются самые старые записи, а `onError` получает один вызов с кодом `QUEUE_OVERFLOW`.
+Only one request is in flight at a time, the rest waits in the queue. When the queue is full, the oldest entries are dropped and `onError` is called once with the code `QUEUE_OVERFLOW`.
 
-Пакет сам не подписывается на сигналы процесса. Вызывайте `flush()` или `close()` там, где приложение завершается.
+The package never subscribes to process signals on its own. Call `flush()` or `close()` where your application shuts down.
 
-## Необработанные исключения
+## Uncaught exceptions
 
-Опция `captureUncaught` отправляет в KELOPS необработанные исключения (`uncaughtException`) и необработанные отклонённые промисы (`unhandledRejection`). По умолчанию выключена.
+The `captureUncaught` option sends uncaught exceptions (`uncaughtException`) and unhandled promise rejections (`unhandledRejection`) to KELOPS. It is off by default.
 
 ```ts
 const logger = new KelopsLogger({
@@ -81,21 +81,21 @@ const logger = new KelopsLogger({
 })
 ```
 
-Что происходит при ошибке:
+What happens when an error occurs:
 
-1. В KELOPS уходит запись уровня `error` с сообщением `Uncaught exception: ...` или `Unhandled promise rejection: ...`. В `context` лежат `error` (имя, сообщение, стек) и `origin`.
-2. Пакет ждёт отправки, но не дольше 3 секунд.
-3. Процесс завершается с кодом 1, как и без этой опции.
+1. An `error` entry is sent with the message `Uncaught exception: ...` or `Unhandled promise rejection: ...`. The `context` holds `error` (name, message, stack) and `origin`.
+2. The package waits for the delivery, but no longer than 3 seconds.
+3. The process exits with code 1, just as it would without this option.
 
-Время ожидания можно изменить: `captureUncaught: { flushTimeoutMs: 5000 }`.
+The wait time can be changed with `captureUncaught: { flushTimeoutMs: 5000 }`.
 
-Если в приложении уже есть свой обработчик `uncaughtException` или `unhandledRejection`, пакет только отправляет запись и процесс не завершает: решение остаётся за вашим обработчиком.
+If your application already has its own `uncaughtException` or `unhandledRejection` handler, the package only sends the entry and does not exit: the decision stays with your handler.
 
-Опцию можно включить только у одного логгера в процессе, второй `new KelopsLogger` с `captureUncaught` бросит ошибку. `await logger.close()` снимает обработчики.
+The option can be enabled for one logger per process, a second `new KelopsLogger` with `captureUncaught` throws an error. `await logger.close()` removes the handlers.
 
-## Свой способ отправки
+## Using the client directly
 
-Если нужна своя очередь, используйте `KelopsClient`. Он принимает готовые записи и отправляет их пачками, делит на запросы по 2000 штук:
+If you need your own queue, use `KelopsClient`. It takes ready-made entries and sends them in batches, splitting them into requests of 2000 entries:
 
 ```ts
 import { KelopsClient } from 'kelops-logger'
@@ -108,45 +108,45 @@ const result = await client.send([
 ])
 ```
 
-`send` возвращает `{ accepted, rejected, error? }`. Если запрос не удался, бросает `KelopsError`.
+`send` returns `{ accepted, rejected, error? }`. If a request fails, it throws a `KelopsError`.
 
-## Параметры
+## Options
 
-| Параметр | Обязательный | По умолчанию | Значение |
+| Option | Required | Default | Meaning |
 |---|---|---|---|
-| `apiKey` | да | | ключ API из KELOPS (`klp_...`) |
-| `service` | да, для `KelopsLogger` | | имя сервиса, попадает в каждую запись |
-| `projectId` | нет | проект из ключа | проект, в который писать |
-| `timeoutMs` | нет | 10000 | таймаут одного запроса |
-| `retry` | нет | см. ниже | настройки повторов |
-| `buffer` | нет | выключена | очередь |
-| `captureUncaught` | нет | выключена | отправка необработанных исключений |
-| `onError` | нет | | вызывается при любой ошибке отправки |
-| `fetch` | нет | глобальный `fetch` | своя реализация, например для тестов |
+| `apiKey` | yes | | KELOPS API key (`klp_...`) |
+| `service` | yes, for `KelopsLogger` | | service name, added to every entry |
+| `projectId` | no | project of the key | project to write to |
+| `timeoutMs` | no | 10000 | timeout of a single request |
+| `retry` | no | see below | retry settings |
+| `buffer` | no | off | queue |
+| `captureUncaught` | no | off | send uncaught exceptions |
+| `onError` | no | | called on any delivery error |
+| `fetch` | no | global `fetch` | custom implementation, for example in tests |
 
-## Ошибки и повторы
+## Errors and retries
 
-Запрос повторяется при сетевой ошибке, таймауте, статусе 429 и любом 5xx. Если сервер прислал `Retry-After`, используется он, иначе задержка растёт вдвое с каждой попыткой.
+A request is retried after a network error, a timeout, status 429 and any 5xx. If the server sends `Retry-After`, it is used, otherwise the delay doubles with every attempt.
 
 ```ts
 retry: { attempts: 3, baseDelayMs: 500, maxDelayMs: 30000 }
 ```
 
-`attempts` это общее число попыток вместе с первой. Ошибки 4xx (неверный ключ, чужой проект, неверные данные) не повторяются.
+`attempts` is the total number of attempts including the first one. 4xx errors (invalid key, forbidden project, invalid data) are not retried.
 
-`KelopsError` содержит `code`, `message`, `status` и `retryAfterMs`. Коды сервера (`INVALID_API_KEY`, `API_KEY_REVOKED`, `PROJECT_FORBIDDEN`, `RATE_LIMITED`, `VALIDATION_FAILED`, `OVERLOADED` и другие) приходят как есть. Пакет добавляет свои:
+`KelopsError` has `code`, `message`, `status` and `retryAfterMs`. Server codes (`INVALID_API_KEY`, `API_KEY_REVOKED`, `PROJECT_FORBIDDEN`, `RATE_LIMITED`, `VALIDATION_FAILED`, `OVERLOADED` and others) are passed as they are. The package adds its own:
 
-| Код | Когда |
+| Code | When |
 |---|---|
-| `NETWORK` | запрос не дошёл до сервера |
-| `TIMEOUT` | сервер не ответил за `timeoutMs` |
-| `SERIALIZATION_FAILED` | запись не удалось превратить в JSON |
-| `QUEUE_OVERFLOW` | очередь переполнилась, старые записи удалены |
-| `CLOSED` | запись отправлена в закрытый логгер |
+| `NETWORK` | the request did not reach the server |
+| `TIMEOUT` | the server did not answer within `timeoutMs` |
+| `SERIALIZATION_FAILED` | an entry could not be converted to JSON |
+| `QUEUE_OVERFLOW` | the queue was full and the oldest entries were dropped |
+| `CLOSED` | an entry was sent to a closed logger |
 
-Если сервер принял часть записей, а остальные отклонил (`ITEMS_REJECTED`), повторов нет, а `onError` получает причину первого отклонения.
+If the server accepts some entries and rejects the rest (`ITEMS_REJECTED`), nothing is retried, and `onError` receives the reason for the first rejection.
 
-## Разработка
+## Development
 
 ```
 npm install
@@ -155,20 +155,20 @@ npm run typecheck
 npm run build
 ```
 
-Структура:
+Structure:
 
-- `src/transport.ts` один запрос к серверу и разбор ответа
-- `src/retry.ts` правила повторов и задержки
-- `src/client.ts` `KelopsClient`: деление на пачки и повторы
-- `src/buffer.ts` очередь
-- `src/logger.ts` `KelopsLogger`: методы уровней, `flush`, `close`
-- `src/uncaught.ts` перехват необработанных исключений
-- `src/serialize.ts` подготовка `context` к отправке
+- `src/transport.ts` one request to the server and parsing of the response
+- `src/retry.ts` retry rules and delays
+- `src/client.ts` `KelopsClient`: splitting into batches and retries
+- `src/buffer.ts` queue
+- `src/logger.ts` `KelopsLogger`: level methods, `flush`, `close`
+- `src/uncaught.ts` capturing of uncaught exceptions
+- `src/serialize.ts` preparing `context` for sending
 - `src/errors.ts` `KelopsError`
-- `src/types.ts` типы
+- `src/types.ts` types
 
-Адрес сервера зашит в `src/transport.ts` (`DEFAULT_URL`). Тесты подменяют `fetch` и не ходят в сеть, кроме `test/integration.test.ts`: он поднимает локальный HTTP-сервер.
+The server address is hardcoded in `src/transport.ts` (`DEFAULT_URL`). The tests replace `fetch` and do not touch the network, except `test/integration.test.ts`, which starts a local HTTP server.
 
-## Лицензия
+## License
 
 MIT

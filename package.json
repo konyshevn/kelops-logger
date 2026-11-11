@@ -1,7 +1,7 @@
 {
   "name": "kelops-logger",
   "version": "0.1.0",
-  "description": "Отправка логов из Node.js в KELOPS",
+  "description": "Send logs from Node.js to KELOPS",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
